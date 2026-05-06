@@ -492,9 +492,9 @@ class DatabaseS3Spool extends Swift_ConfigurableSpool
     /**
      * @param $object MailQueue
      * @param $delaySeconds int
-     * @throws \Interop\Queue\Exception
-     * @throws \Interop\Queue\InvalidDestinationException
-     * @throws \Interop\Queue\InvalidMessageException
+     * @throws \Interop\Queue\Exception\Exception
+     * @throws \Interop\Queue\Exception\InvalidDestinationException
+     * @throws \Interop\Queue\Exception\InvalidMessageException
      */
     protected function queueMail(MailQueue $object, $delaySeconds = 0)
     {

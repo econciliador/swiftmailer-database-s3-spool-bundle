@@ -5,7 +5,7 @@ services:
             - "%cgonser_swift_mailer_database_s3_spool.s3%"
             - "%cgonser_swift_mailer_database_s3_spool.entity_class%"
             - "@doctrine"
-            - "@enqueue.transport.context"
+            - "@enqueue.transport.default.context"
             - "@cgonser.swift_mailer.transport_chain"
             - "@doctrine.orm.default_second_level_cache.region_cache_driver"
             - "@logger"
