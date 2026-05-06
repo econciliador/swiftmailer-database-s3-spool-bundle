@@ -46,7 +46,7 @@ class RetryMessageCommand extends ContainerAwareCommand
 
         $logger->info("Retrying ".count($messages)." messages...");
 
-        $context = $container->get('enqueue.transport.context');
+        $context = $container->get('enqueue.transport.default.context');
 
         $amqpQueue = $context->createQueue('cgonser_mail_queue');
         $amqpQueue->addFlag(AmqpQueue::FLAG_DURABLE);
