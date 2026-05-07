@@ -1,100 +1,90 @@
 <?php
-/**
- * Created by PhpStorm.
- * User: Rafael
- * Date: 10/31/2016
- * Time: 5:34 PM
- */
 
 namespace Cgonser\SwiftMailerDatabaseS3SpoolBundle\Transport;
 
-
 use Cgonser\SwiftMailerDatabaseS3SpoolBundle\Entity\MailQueueTransport;
 use Cgonser\SwiftMailerDatabaseS3SpoolBundle\Repository\MailQueueTransportRepository;
+use Symfony\Component\Mailer\Transport;
+use Symfony\Component\Mailer\Transport\TransportInterface;
 
 class TransportChain
 {
-
     /** @var MailQueueTransportRepository */
     private $transportRepository;
 
     /** @var array */
     private $transports = null;
 
-    /** @var array */
-    private $swiftMailerTransports = [];
+    /** @var array<string, TransportInterface> */
+    private $mailerTransports = [];
 
-    /**
-     * TransportChain constructor.
-     * @param MailQueueTransportRepository $transportRepository
-     * @param array $transports
-     */
     public function __construct(MailQueueTransportRepository $transportRepository)
     {
         $this->transportRepository = $transportRepository;
-        $this->loadSwiftMailerTranports();
+        $this->loadMailerTransports();
     }
 
-
-    public function addSwiftTransport(\Swift_Transport $transport, $alias)
+    public function addMailerTransport(TransportInterface $transport, string $alias): void
     {
-        $this->swiftMailerTransports[$alias] = $transport;
-    }
-
-    /**
-     * @return array
-     */
-    public function getSwiftTransports()
-    {
-        return $this->swiftMailerTransports;
+        $this->mailerTransports[$alias] = $transport;
     }
 
     /**
-     * @return \Swift_Transport
+     * @return array<string, TransportInterface>
      */
-    public function getSwiftTransport($alias): \Swift_Transport
+    public function getMailerTransports(): array
     {
-        if (array_key_exists($alias, $this->swiftMailerTransports)) {
-            return $this->swiftMailerTransports[$alias];
+        return $this->mailerTransports;
+    }
+
+    public function getMailerTransport(string $alias): TransportInterface
+    {
+        if (array_key_exists($alias, $this->mailerTransports)) {
+            return $this->mailerTransports[$alias];
         }
 
-        throw new \Exception('No swift transport was found.');
+        throw new \RuntimeException('No mailer transport was found.');
     }
 
-
-    /**
-     * @return \MailQueueTransport
-     */
-    public function getTransport($alias): MailQueueTransport
+    public function getTransport(string $alias): MailQueueTransport
     {
-        foreach ($this->transports as $transport){
+        foreach ($this->transports as $transport) {
             /** @var MailQueueTransport $transport */
-            if($transport->getAlias() == $alias){
+            if ($transport->getAlias() == $alias) {
                 return $transport;
             }
         }
 
-        throw new \Exception('No transport was found.');
+        throw new \RuntimeException('No transport was found.');
     }
 
+    /**
+     * @param string[] $tags
+     *
+     * @return array{MailQueueTransport: ?MailQueueTransport, MailerTransport: TransportInterface}
+     */
     public function getTransportByTags(array $tags): array
     {
         $score = [];
         $defaultTransport = null;
-        foreach ($this->getTranports() as $transport) {
+
+        foreach ($this->getTransports() as $transport) {
             /** @var MailQueueTransport $transport */
             $score[$transport->getAlias()] = 0;
+
             foreach ($transport->getTags() as $tag) {
-                if(substr($tag,0,1) == '-' && in_array(substr($tag,1), $tags) ){
+                if (substr($tag, 0, 1) == '-' && in_array(substr($tag, 1), $tags, true)) {
                     $score[$transport->getAlias()] = 0;
                     break;
-                }else{
-                    $score[$transport->getAlias()] += in_array($tag, $tags) ? 1 : 0;
                 }
+
+                $score[$transport->getAlias()] += in_array($tag, $tags, true) ? 1 : 0;
             }
+
             if ($score[$transport->getAlias()] == 0) {
                 unset($score[$transport->getAlias()]);
             }
+
             if ($transport->isDefault()) {
                 $defaultTransport = $transport;
             }
@@ -102,43 +92,59 @@ class TransportChain
 
         if (count($score) > 0) {
             arsort($score);
+
             return [
-              'MailQueueTransport'  => $this->getTransport(key($score)),
-              'Swift_Transport'  => $this->getSwiftTransport(key($score))
+                'MailQueueTransport' => $this->getTransport((string) key($score)),
+                'MailerTransport' => $this->getMailerTransport((string) key($score)),
             ];
         }
 
         if ($defaultTransport instanceof MailQueueTransport) {
             return [
-                'MailQueueTransport'  => $defaultTransport,
-                'Swift_Transport'  => $this->getSwiftTransport($defaultTransport->getAlias())
+                'MailQueueTransport' => $defaultTransport,
+                'MailerTransport' => $this->getMailerTransport($defaultTransport->getAlias()),
             ];
         }
 
-        throw new \Exception('No transports were found.');
+        throw new \RuntimeException('No transports were found.');
     }
 
     /**
-     * @return array
+     * @return MailQueueTransport[]
      */
-    protected function getTranports()
+    protected function getTransports(): array
     {
         if ($this->transports == null) {
             $this->transports = $this->transportRepository->findBy(['enabled' => true]);
         }
+
         return $this->transports;
     }
 
-    protected function loadSwiftMailerTranports()
+    protected function loadMailerTransports(): void
     {
-        /** @var MailQueueTransport $transport */
-        foreach ($this->getTranports() as $transport) {
-            $swiftTransport = (new \Swift_SmtpTransport($transport->getHost(), $transport->getPort()))
-                ->setUsername($transport->getUsername())
-                ->setPassword($transport->getPassword())
-                ->setEncryption($transport->getEncryption())
-            ;
-            $this->addSwiftTransport($swiftTransport, $transport->getAlias());
+        foreach ($this->getTransports() as $transport) {
+            /** @var MailQueueTransport $transport */
+            $encryption = strtolower((string) $transport->getEncryption());
+            if (!in_array($encryption, ['', 'ssl', 'tls'], true)) {
+                throw new \RuntimeException(sprintf('Unsupported transport encryption "%s" for alias "%s".', $encryption, (string) $transport->getAlias()));
+            }
+            $scheme = $encryption === 'ssl' ? 'smtps' : 'smtp';
+
+            $dsn = sprintf(
+                '%s://%s:%s@%s:%d',
+                $scheme,
+                rawurlencode((string) $transport->getUsername()),
+                rawurlencode((string) $transport->getPassword()),
+                (string) $transport->getHost(),
+                (int) $transport->getPort()
+            );
+
+            if ($encryption === 'tls') {
+                $dsn .= '?auto_tls=true';
+            }
+
+            $this->addMailerTransport(Transport::fromDsn($dsn), (string) $transport->getAlias());
         }
     }
 }

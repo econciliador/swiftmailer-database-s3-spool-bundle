@@ -1,12 +1,12 @@
-# Swift Mailer Database S3 Spool
+# Swift Mailer Database S3 Spool (Symfony Mailer migration)
 
-A Symfony bundle that enables Swift Mailer to spool messages from a database and store message files on an Amazon S3 bucket.
+A Symfony bundle that queues messages in a database and stores message payloads in an Amazon S3 bucket, now using **Symfony Mailer** APIs.
 
-It requires the [AWS PHP SDK](https://github.com/aws/aws-sdk-php) and relies on Doctrine for data persistency.
+It requires the [AWS PHP SDK](https://github.com/aws/aws-sdk-php) and relies on Doctrine for data persistence.
 
 ## Installation
 
-This bundle can be installed via Composer by requiring `cgonser/swiftmailer-database-s3-spool-bundle package` in your project's composer.json:
+Install via Composer:
 
 ```json
 {
@@ -16,79 +16,88 @@ This bundle can be installed via Composer by requiring `cgonser/swiftmailer-data
 }
 ```
 
-Then, enable the bundle by adding it to the list of registered bundles
-in the `app/AppKernel.php` file of your project:
+Then enable the bundle (if your Symfony version does not auto-register bundles):
 
 ```php
-<?php
-// app/AppKernel.php
-
-class AppKernel extends Kernel
-{
-    public function registerBundles()
-    {
-        $bundles = [
-            // ...
-
-            new Cgonser\SwiftMailerDatabaseS3SpoolBundle\CgonserSwiftMailerDatabaseS3SpoolBundle(),
-        ];
-    }
-}
+// config/bundles.php
+return [
+    // ...
+    Cgonser\SwiftMailerDatabaseS3SpoolBundle\CgonserSwiftMailerDatabaseS3SpoolBundle::class => ['all' => true],
+];
 ```
 
 ## Configuration
 
-Please remember to first configure the AWS SDK accordingly. Once it's  properly configured, you can place this bundle configuration in `app/config/config.yml` file.
+Configure the bundle in your app config:
+
+```yaml
+# config/packages/cgonser_swift_mailer_database_s3_spool.yaml
+cgonser_swift_mailer_database_s3_spool:
+    s3:
+        bucket: '<TARGET BUCKET>'
+        region: '<S3 REGION>'
+        folder: '<TARGET FOLDER>' # optional
+```
+
+Optional explicit AWS credentials:
 
 ```yaml
 cgonser_swift_mailer_database_s3_spool:
     s3:
-        bucket: "<TARGET BUCKET>"
-        region: "<S3 REGION>"
-        folder: "<TARGET FOLDER>" (optional)
+        bucket: '<TARGET BUCKET>'
+        region: '<S3 REGION>'
+        key: '<YOUR AWS KEY>'
+        secret: '<YOUR AWS SECRET>'
 ```
 
-Still in `app/config/config.yml`, enable the services and change the swift mailer spool configuration:
+Import bundle services and wire Symfony Mailer to the DB/S3 transport service:
 
 ```yaml
+# config/services.yaml
 imports:
-    // ...
-    - { resource: "@CgonserSwiftMailerDatabaseS3SpoolBundle/Resources/config/services.yml" }
+    - { resource: '@CgonserSwiftMailerDatabaseS3SpoolBundle/Resources/config/services.yml' }
+
+services:
+    mailer.transport:
+        alias: mailer.transport.db_s3
 ```
+
+Configure framework mailer (required by Symfony Mailer):
 
 ```yaml
-swiftmailer:
-    // ...
-    spool: { type: db_s3 }
+# config/packages/mailer.yaml
+framework:
+    mailer:
+        dsn: 'null://null'
 ```
 
-You can also provide specific AWS credentials for this bucket, if you want to:
+## Sending queued messages
 
-```yaml
-cgonser_swift_mailer_database_s3_spool:
-    s3:
-        bucket: "<TARGET BUCKET>"
-        region: "<BUCKET REGION>"
-        key: "<YOUR AWS KEY>"
-        secret: "<YOUR AWS SECRET>"
-```
-
-After finishing the configuration, you will need to update your database schema to create the entity necessary to store the spooler queue.
+Messages are queued when `MailerInterface::send()` is called through this transport. Process the queue with:
 
 ```console
-php bin/console doctrine:schema:update
+php bin/console cgonser:mailer:send
+```
+
+Useful options:
+
+```console
+php bin/console cgonser:mailer:send --message_limit=100 --time_limit=60
 ```
 
 ## Mail Queue Entity
 
-By default, the mail queue will be stored in a table named cgonser_mail_queue, but you can override the default entity. To do so, you will need to create a new entity with the same structure of the default one (which you can find inside the package at `Entity/MailQueue.php`) and change its name and/or definition.
-
-After that, you will need to inform the bundle about the new entity, using the following configuration in `app/config/config.yml`:
+By default, the mail queue is stored in `cgonser_mail_queue`, but you can override the entity class using:
 
 ```yaml
 cgonser_swift_mailer_database_s3_spool:
-    entity_class: "<YOUR NEW ENTITY>" (e.g.: \AppBundle\Entity\MailQueue)
+    entity_class: '<YOUR NEW ENTITY>' # e.g. App\Entity\MailQueue
 ```
 
-Keep in mind that this bundle relies on the default entity structure and modifying that may break it.
+After setup, update your database schema:
 
+```console
+php bin/console doctrine:schema:update --force
+```
+
+Keep in mind that this bundle relies on the default entity structure and changing it may break behavior.
