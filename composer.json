@@ -1,18 +1,19 @@
 {
     "name" : "cgonser/swiftmailer-database-s3-spool-bundle",
     "type": "symfony-bundle",
-    "description" : "A symfony bundle that enables Swift Mailer to spool messages from a database and store message files on Amazon S3",
-    "keywords" : ["swift mailer", "swiftmailer", "database", "s3", "spool"],
+    "description" : "A Symfony bundle that queues messages in a database/S3 spool and delivers them with Symfony Mailer",
+    "keywords" : ["symfony mailer", "database", "s3", "spool"],
     "license" : "MIT",
     "authors" : [{
         "name" : "Carlos Gonser",
         "email" : "carlos@gonser.com.br"
     }],
     "require" : {
-    	"php": ">=5.4.0",
-    	"doctrine/orm": "^2.5",
-        "doctrine/cache": "^1.6",
-    	"symfony/swiftmailer-bundle": "^2.3 || ^3.0",
+        "php": ">=7.4",
+        "doctrine/orm": "^2.5",
+        "doctrine/cache": "^1.6 || ^2.2",
+        "symfony/mailer": "^5.4 || ^6.4 || ^7.0",
+        "symfony/mime": "^5.4 || ^6.4 || ^7.0",
         "aws/aws-sdk-php": "^3.0",
         "enqueue/enqueue-bundle": "^0.10.27"
     },
