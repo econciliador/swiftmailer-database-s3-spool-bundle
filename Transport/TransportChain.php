@@ -125,7 +125,11 @@ class TransportChain
     {
         foreach ($this->getTransports() as $transport) {
             /** @var MailQueueTransport $transport */
-            $scheme = strtolower((string) $transport->getEncryption()) === 'ssl' ? 'smtps' : 'smtp';
+            $encryption = strtolower((string) $transport->getEncryption());
+            if (!in_array($encryption, ['', 'ssl', 'tls'], true)) {
+                throw new \RuntimeException(sprintf('Unsupported transport encryption "%s" for alias "%s".', $encryption, (string) $transport->getAlias()));
+            }
+            $scheme = $encryption === 'ssl' ? 'smtps' : 'smtp';
 
             $dsn = sprintf(
                 '%s://%s:%s@%s:%d',
@@ -135,6 +139,10 @@ class TransportChain
                 (string) $transport->getHost(),
                 (int) $transport->getPort()
             );
+
+            if ($encryption === 'tls') {
+                $dsn .= '?auto_tls=true';
+            }
 
             $this->addMailerTransport(Transport::fromDsn($dsn), (string) $transport->getAlias());
         }

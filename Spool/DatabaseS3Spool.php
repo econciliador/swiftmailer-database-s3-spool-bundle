@@ -218,7 +218,7 @@ class DatabaseS3Spool implements TransportInterface
             $messages[$decodedMessageBody['id']] = $message;
         }
 
-        if (!$messages || count($messages) == 0) {
+        if (!$messages || count($messages) === 0) {
             sleep(5);
 
             return 0;
@@ -502,10 +502,7 @@ class DatabaseS3Spool implements TransportInterface
 
     public function setDisableDelivery($disableDelivery): DatabaseS3Spool
     {
-        $this->disableDelivery = false;
-        if ($disableDelivery == true) {
-            $this->disableDelivery = $disableDelivery;
-        }
+        $this->disableDelivery = (bool) $disableDelivery;
 
         return $this;
     }
